@@ -19,7 +19,7 @@ sentiment_tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-
 similarity_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 # OpenAI API Key (Replace with your actual key)
-openai.api_key = "YOUR_OPENAI_API_KEY"
+openai.api_key = "sk-...YDoA"
 
 def transcribe_audio(audio_file_path):
     """

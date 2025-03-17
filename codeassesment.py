@@ -6,7 +6,7 @@ import bigO
 from pylint import epylint as lint
 
 # OpenAI API Key (Replace with actual key)
-openai.api_key = "your-api-key"
+openai.api_key = "sk-...YDoA"
 
 def analyze_code_structure(code):
     """
