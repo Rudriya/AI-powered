@@ -6,7 +6,8 @@ import numpy as np
 from pydub import AudioSegment
 import noisereduce as nr
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras.models import load_model
+import tensorflow as tf
+model = tf.keras.models.load_model("your_model.h5")
 import torch
 from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
 
