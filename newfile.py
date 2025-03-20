@@ -8,18 +8,41 @@ import noisereduce as nr
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 import torch
+from speechbrain.utils.fetching import fetch, LocalStrategy
 from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
+import os
+
+# ✅ Change Fetch Strategy to Copy
+fetch.strategy = LocalStrategy.COPY  
 
 # ✅ Load Models
 # Load Whisper ASR model
 whisper_model = whisper.load_model("base")
 
-# Load Emotion Detection Model (Pre-trained on RAVDESS)
-emotion_model = tf.keras.models.load_model("speech_emotion_model.h5")  # ✅ TensorFlow 2.19.0 fix
+from model_train import load_emotion_model  # ✅ Import the model function
+
+# ✅ Load the Model with Required Parameters
+emotion_model = load_emotion_model("speech_emotion_model.pth", input_size=64, num_classes=8)
+
+print("✅ Model Loaded Successfully!")
 scaler = StandardScaler()
 
-# Load Speaker Verification Model
-embedding_model = PretrainedSpeakerEmbedding("speechbrain/spkrec-ecapa-voxceleb")
+
+# ✅ Set speechbrain cache directory
+os.environ["SPEECHBRAIN_CACHE"] = "C:/Users/Asus/OneDrive/Desktop/New project/project"
+
+# ✅ Change Fetch Strategy to Copy
+fetch.strategy = LocalStrategy.COPY  
+
+# ✅ Load Speaker Verification Model
+embedding_model = PretrainedSpeakerEmbedding.from_hparams(
+    source="speechbrain/spkrec-ecapa-voxceleb",
+    savedir=os.environ["SPEECHBRAIN_CACHE"]
+)
+
+print("✅ Speaker Embedding Model Loaded Successfully!")
+
+
 
 # -------------------------- 1️⃣ Extract Audio from Video --------------------------
 def extract_audio(video_path, output_audio_path):
@@ -30,12 +53,7 @@ def extract_audio(video_path, output_audio_path):
 
 # -------------------------- 2️⃣ Speech-to-Text using Whisper --------------------------
 def transcribe_audio(audio_path):
-    """
-    Convert speech to text using OpenAI Whisper.
-    """
-    audio, sr = librosa.load(audio_path, sr=16000)
-    sf.write("processed_audio.wav", audio, sr)
-    result = whisper_model.transcribe("processed_audio.wav")
+    result = whisper_model.transcribe(audio_path)  # Use original audio
     return result["text"]
 
 # -------------------------- 3️⃣ Prosody Analysis (Pitch, Tone, Speech Rate) --------------------------
@@ -64,7 +82,9 @@ def verify_speaker(audio_path, reference_embedding):
     Verify if another speaker is present by comparing embeddings.
     """
     y, sr = librosa.load(audio_path, sr=16000)
-    embedding = embedding_model(torch.tensor(y).unsqueeze(0))
+    y_tensor = torch.tensor(y, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+
+    embedding = embedding_model(y_tensor)
 
     # Ensure tensor format compatibility
     similarity = torch.nn.functional.cosine_similarity(reference_embedding, embedding, dim=0)
@@ -81,7 +101,8 @@ def predict_emotion(audio_path):
     mfccs = np.mean(mfccs.T, axis=0)
 
     # Standardize input (Prevent refitting scaler)
-    mfccs_scaled = scaler.transform(mfccs.reshape(1, -1))  # ✅ Use transform instead of fit_transform
+    mfccs_scaled = scaler.transform(mfccs.reshape(-1, 1))  # ✅ Use transform instead of fit_transform
+    
     prediction = emotion_model.predict(mfccs_scaled)
     
     return np.argmax(prediction)  # ✅ Return emotion class index

@@ -1,11 +1,12 @@
 import torch
-import openai
+import whisper
 import nltk
 import numpy as np
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from sentence_transformers import SentenceTransformer, util
 from nltk.sentiment import SentimentIntensityAnalyzer
 
+# Download nltk lexicon
 nltk.download('vader_lexicon')
 
 # Load Sentiment Analyzer
@@ -18,21 +19,16 @@ sentiment_tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-
 # Load BERT for Semantic Similarity
 similarity_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
-# OpenAI API Key (Replace with your actual key)
-openai.api_key = "sk-...YDoA"
+# Load Open-Source Whisper Model
+whisper_model = whisper.load_model("base")  # Options: tiny, base, small, medium, large
 
 def transcribe_audio(audio_file_path):
-    """
-    Convert speech to text using OpenAI Whisper API (or Google Speech-to-Text)
-    """
-    with open(audio_file_path, "rb") as audio_file:
-        transcript = openai.Audio.transcribe("whisper-1", audio_file)
-    return transcript["text"]
+    """Convert speech to text using Whisper."""
+    result = whisper_model.transcribe(audio_file_path)
+    return result["text"]
 
 def analyze_sentiment(text):
-    """
-    Analyze sentiment using both VADER and RoBERTa
-    """
+    """Analyze sentiment using both VADER and RoBERTa."""
     vader_score = sia.polarity_scores(text)['compound']
 
     # RoBERTa Sentiment Analysis
@@ -49,32 +45,14 @@ def analyze_sentiment(text):
     
     return sentiment_result
 
-def evaluate_coherence(text):
-    """
-    Check logical flow and coherence using GPT-4
-    """
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "Evaluate coherence, clarity, and structure of the given answer. Rate from 1 to 10 and provide feedback."},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response["choices"][0]["message"]["content"]
-
 def evaluate_correctness(candidate_answer, model_answer):
-    """
-    Evaluate answer correctness using BERT Semantic Similarity
-    """
+    """Evaluate answer correctness using BERT Semantic Similarity."""
     embeddings = similarity_model.encode([candidate_answer, model_answer], convert_to_tensor=True)
     similarity_score = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
-    
     return similarity_score  # Score between 0 to 1 (higher means more similar)
 
 def detect_hesitation(speech_text):
-    """
-    Detect hesitation based on filler words and pauses
-    """
+    """Detect hesitation based on filler words and pauses."""
     filler_words = ["uh", "um", "like", "you know", "I mean", "sort of", "kind of"]
     words = speech_text.lower().split()
     hesitation_count = sum(words.count(word) for word in filler_words)
@@ -83,9 +61,7 @@ def detect_hesitation(speech_text):
     return hesitation_score  # Higher score means more hesitation
 
 def assess_behavioral_metrics(facial_confidence, speech_rate, tone_analysis):
-    """
-    Combine behavioral metrics into a confidence score
-    """
+    """Combine behavioral metrics into a confidence score."""
     # Weighted score based on facial confidence, speech rate, and tone
     weight_facial = 0.5
     weight_speech = 0.3
@@ -95,12 +71,9 @@ def assess_behavioral_metrics(facial_confidence, speech_rate, tone_analysis):
     return final_confidence  # Value between 0 to 1
 
 def assess_candidate(audio_file_path, model_answer, facial_confidence, speech_rate, tone_analysis):
-    """
-    Perform full assessment based on all parameters
-    """
+    """Perform full assessment based on all parameters."""
     transcribed_text = transcribe_audio(audio_file_path)
     sentiment_result = analyze_sentiment(transcribed_text)
-    coherence_feedback = evaluate_coherence(transcribed_text)
     correctness_score = evaluate_correctness(transcribed_text, model_answer)
     hesitation_score = detect_hesitation(transcribed_text)
     behavioral_score = assess_behavioral_metrics(facial_confidence, speech_rate, tone_analysis)
@@ -110,23 +83,21 @@ def assess_candidate(audio_file_path, model_answer, facial_confidence, speech_ra
 
     # Generate Actionable Feedback
     feedback = f"""
-    **Technical Analysis:**
+    *Technical Analysis:*
     - Correctness: {correctness_score:.2f} (Higher is better)
-    - Clarity & Coherence: {coherence_feedback}
     
-    **Behavioral Insights:**
+    *Behavioral Insights:*
     - Confidence Level: {behavioral_score:.2f}
     - Hesitation Score: {hesitation_score:.2f} (Lower is better)
     - Sentiment: {sentiment_result}
     
-    **Final Score: {final_score:.2f}/1.0**
+    *Final Score: {final_score:.2f}/1.0*
     Recommendations: Focus on fluency and clarity. Reduce hesitation to improve confidence.
     """
 
     final_result = {
         "transcribed_text": transcribed_text,
         "sentiment_analysis": sentiment_result,
-        "coherence_feedback": coherence_feedback,
         "correctness_score": correctness_score,
         "hesitation_score": hesitation_score,
         "behavioral_score": behavioral_score,
@@ -136,7 +107,7 @@ def assess_candidate(audio_file_path, model_answer, facial_confidence, speech_ra
     
     return final_result
 
-# Example Usage
+# ✅ Corrected Main Function
 if __name__ == "__main__":
     audio_path = "candidate_response.wav"  # Replace with actual audio file
     model_ans = "A linked list is a data structure where elements are connected using pointers."
@@ -147,4 +118,6 @@ if __name__ == "__main__":
     tone_analysis = 0.7  # Tone positivity metric
 
     result = assess_candidate(audio_path, model_ans, facial_conf, speech_rate, tone_analysis)
-    print(result)
+
+    # ✅ Print feedback so you get an output
+    print(result["feedback"])
