@@ -1,12 +1,10 @@
 import ast
-import openai
 import autopep8
 import subprocess
 import bigO
+from pylint.lint import Run
 from pylint import epylint as lint
 
-# OpenAI API Key (Replace with actual key)
-openai.api_key = "sk-...YDoA"
 
 def analyze_code_structure(code):
     """
@@ -26,6 +24,7 @@ def analyze_code_structure(code):
     except SyntaxError as e:
         return {"error": str(e)}
 
+
 def evaluate_algorithm_complexity(code, example_input):
     """
     Analyze algorithm efficiency (Big-O Complexity).
@@ -33,12 +32,13 @@ def evaluate_algorithm_complexity(code, example_input):
     exec_namespace = {}
     try:
         exec(code, exec_namespace)
-        test_function = list(exec_namespace.values())[-1]  # Get the last function defined
+        test_function = [f for f in exec_namespace.values() if callable(f)][-1]  # Get the last defined function
         bigo = bigO.BigO()
-        complexity = bigo.test(test_function, example_input)
+        complexity = bigo.test(test_function, "random")
         return str(complexity)
     except Exception as e:
         return str(e)
+
 
 def run_test_cases(code, test_cases):
     """
@@ -67,6 +67,7 @@ def run_test_cases(code, test_cases):
     except Exception as e:
         return [{"error": str(e), "status": "Error"}]
 
+
 def analyze_code_quality(code):
     """
     Check code quality using Pylint.
@@ -75,48 +76,58 @@ def analyze_code_quality(code):
         f.write(code)
     
     pylint_stdout, pylint_stderr = lint.py_run("temp_code.py", return_std=True)
-    return pylint_stdout.getvalue()
+    return pylint_stdout.getvalue()  # Return the text output directly
 
-def generate_ai_feedback(code, test_results, complexity):
+
+def generate_static_feedback(code, test_results, complexity):
     """
-    Use GPT-4 to provide AI-powered feedback on code logic and improvements.
+    Generate predefined rule-based feedback instead of OpenAI.
     """
-    prompt = f"""
-    Given the following Python code:
+    feedback = []
 
-    {code}
+    # Check for recursion
+    if "def " in code and "return" in code and "(" in code and ")" in code:
+        if any(line.strip().startswith("return") and "(" in line for line in code.split("\n")):
+            feedback.append("Your function uses recursion. Ensure it handles large inputs efficiently.")
 
-    Test Results: {test_results}
-    Algorithm Complexity: {complexity}
+    # Check for loops
+    if "for " in code or "while " in code:
+        feedback.append("Your code contains loops. Consider optimizing them if they are nested.")
 
-    Analyze the correctness, efficiency, and readability of the code.
-    Provide suggestions for improvement and best practices.
-    """
+    # Complexity Analysis Feedback
+    if "O(N^2)" in complexity:
+        feedback.append("Your algorithm has quadratic time complexity (O(N^2)). Try optimizing it.")
+    elif "O(N)" in complexity:
+        feedback.append("Your algorithm has linear time complexity (O(N)), which is efficient for large inputs.")
     
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are an AI coding assistant that reviews code."},
-                  {"role": "user", "content": prompt}]
-    )
-    return response["choices"][0]["message"]["content"]
+    # Test case feedback
+    if any(res["status"] == "Fail" for res in test_results):
+        feedback.append("Some test cases failed. Double-check edge cases and logic errors.")
+
+    if not feedback:
+        feedback.append("Code looks good! No major issues detected.")
+
+    return "\n".join(feedback)
+
 
 def review_code(code, test_cases, example_input):
     """
-    Comprehensive AI-powered code review.
+    Comprehensive rule-based code review (without OpenAI).
     """
     structure = analyze_code_structure(code)
     complexity = evaluate_algorithm_complexity(code, example_input)
     test_results = run_test_cases(code, test_cases)
     quality_report = analyze_code_quality(code)
-    ai_feedback = generate_ai_feedback(code, test_results, complexity)
+    static_feedback = generate_static_feedback(code, test_results, complexity)
     
     return {
         "structure_analysis": structure,
         "algorithm_complexity": complexity,
         "test_case_results": test_results,
         "code_quality_report": quality_report,
-        "ai_feedback": ai_feedback
+        "feedback": static_feedback
     }
+
 
 # Example Usage
 if __name__ == "__main__":
